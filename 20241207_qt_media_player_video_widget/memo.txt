@@ -1,0 +1,313 @@
+★
+gst-launch-1.0 videotestsrc ! video/x-raw,framerate=20/1 ! videoscale ! videoconvert ! x264enc !  rtph264pay  ! udpsink host=127.0.0.1 port=5600
+
+gst-launch-1.0 videotestsrc ! "video/x-raw,width=640,height=480,framerate=15/1" ! videoconvert ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+gst-launch-1.0 videotestsrc ! "video/x-raw,width=640,height=480,framerate=15/1" ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+gst-launch-1.0 videotestsrc ! "video/x-raw,framerate=15/1" ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+
+
+
+
+
+
+
+
+gst-launch-1.0 videotestsrc pattern=ball -v ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+gst-launch-1.0 udpsrc device="/dev/video0" ! video/x-raw,framerate=20/1 ! videoscale ! videoconvert ! x264enc !  rtph264pay  ! udpsink host=127.0.0.1 port=5600
+
+gst-launch-1.0 v4l2src device="/dev/video0" ! video/x-raw,framerate=20/1 ! videoscale ! videoconvert ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+
+
+
+
+# 送信側：
+$ gst-launch-1.0 -e v4l2src device=/dev/video0 ! 'video/x-h264,width=1920,height=1080,framerate=30/1' ! h264parse ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+# 受信側：
+$ gst-launch-1.0 -e udpsrc port=5000 ! application/x-rtp, encoding-name=H264 ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! autovideosink
+
+
+
+
+
+gst-launch-1.0 v4l2src device=/dev/video0 ! decodebin ! x264enc ! rtph264pay ! udpsink host=localhost port=5600
+
+gst-launch-1.0 v4l2src device="/dev/video0" ! video/x-raw,framerate=20/1 ! videoscale ! videoconvert ! x264enc ! rtph264pay ! udpsink host=localhost port=5600
+
+
+
+
+
+
+gst-launch-1.0 v4l2src device="/dev/video0" ! video/x-h264,width=640,height=480,framerate=15/1 ! h264parse ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+gst-launch-1.0 -e v4l2src device=/dev/video0 ! 'video/x-h264,wi	dth=640,height=480,framerate=15/1' ! h264parse ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-h264,width=1920,height=1080,framerate=24/1 ! h264parse ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+
+gst-launch-1.0 v4l2src device=/dev/video0 ! udpsink host=127.0.0.1 port=5600
+
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,width=1920,height=1080! videoconvert ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+
+
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,width=640,height=480 ! x264enc ! queue ! rtph264pay config-interval=10 pt=96 ! udpsink host=127.0.0.1 port=5600
+
+
+
+gst-launch-1.0 -v v4l2src device=/dev/video0 ! video/x-raw,width=640,height=480 ! h264parse ! queue ! rtph264pay config-interval=10 pt=96 ! udpsink host=127.0.0.1 port=5600
+
+
+
+gst-launch-1.0 -v v4l2src device=/dev/video0 do-timestamp=true ! video/x-h264, width=640, height=480, framerate=15/1 ! videoconvert ! x264enc ! rtph264pay config-interval=10 pt=96 ! udpsink host=127.0.0.1 port=5600
+
+
+
+gst-launch-1.0 -vvv -e v4l2src device=/dev/video0 do-timestamp=true norm=NTSC pixel-aspect-ratio=1 ! video/x-raw, format=YUY2, width=720, height=480 ! queue max-size-buffers=0 max-size-time=0 max-size-bytes=0 ! tee name=t ! queue ! videoconvert ! omxh264enc ! video/x-h264, width=720, height=480 ! h264parse ! rtph264pay config-interval=1 ! udpsink host=127.0.0.1 port=5600 t. ! queue ! videoconvert
+
+
+
+
+
+gst-launch-1.0 v4l2src device=/dev/video0 ! video/x-raw,width=1920,height=1080! videoconvert ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+
+
+
+
+gst-launch-1.0 v4l2src device="/dev/video0" ! image/jpeg,width=640,height=480,framerate=15/1 ! jpegdec ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600
+
+
+
+
+
+
+gst-launch-1.0 -v v4l2src device=/dev/video0 ! video/x-raw,width=1280,height=720,framerate=30/1,format=YUY2 ! videoconvert ! video/x-raw,format=NV12 ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600 sync=false
+
+
+
+
+
+
+
+
+
+
+
+
+★
+送信
+gst-launch-1.0 videotestsrc ! video/x-raw,framerate=15/1 ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600 sync=false
+
+gst-launch-1.0 videotestsrc ! video/x-raw ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600 sync=false
+
+
+
+
+
+受信
+
+gst-launch-1.0 -v udpsrc port=5600 ! application/x-rtp ! rtph264depay ! avdec_h264 skip-frame=5 ! autovideosink
+
+
+gst-launch-1.0 udpsrc port=5600 ! application/x-rtp ! rtph264depay ! avdec_h264 ! autovideosink
+
+
+gst-launch-1.0 udpsrc port=5600 ! application/x-rtp ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! autovideosink
+
+
+
+★chatgpt
+gst-launch-1.0 udpsrc port=5600 ! application/x-rtp ! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink
+
+
+
+
+gst-launch-1.0 udpsrc port=5600 ! application/x-rtp,encoding-name=H264,payload=96 ! rtph264depay ! avdec_h264 ! videoconvert ! autovideosink
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+以下のようなc++ programを作成してください
+Gstreamerを使ってudp h.264 streamingを qtのQWidgetの上に表示する
+QWidgetを右クリックして、ドロップダウンメニューから以下の操作を行うことができる
+udp h.264 streamingのmkvファイルに保存していくことを開始する
+udp h.264 streamingのmkvファイルに保存していくことを一時停止する
+udp h.264 streamingのmkvファイルに保存していくことを再開する
+udp h.264 streamingのmkvファイルに保存していくことを終了する
+udp h.264 streamingの表示をキャプチャしてpngファイルで保存する
+udp h.264 streamingのstart/stop/pause/resumeを行う
+udp h.264 streamingを表示しているQWidgetの上に現在時刻をoverlay表示する
+udp h.264 streamingの表示をzoom in/zoom outする
+udp h.264 streamingの表示をフルスクリーン表示に変える
+
+
+
+以下のようなqt c++ programを作成してください
+QWidgetを表示して、そのwindowにpaintEventで、中央下を中心にして、左右に60degreeずつ、120degreeの円弧を2本描画し、左右の円弧の両端を直線で結んでください
+2本の円弧は半径の異なるものにしてください
+描かれるバームクーヘンのような図形は、QWidgetがresizeされてもつねにQWidgetの中央に来るように描画してください
+
+
+
+rtspでvideotestsrc pattern snowを256x200のサイズで送信するgstreamer pipelineを教えてください
+
+gst-launch-1.0 -v videotestsrc pattern=snow ! video/x-raw,width=256,height=200 ! x264enc tune=zerolatency ! rtph264pay config-interval=1 ! udpsink host=127.0.0.1 port=5000
+
+
+rtspclientsink
+rtspsrc
+
+
+
+gst-rtsp-server
+
+
+sudo apt update
+sudo apt install gstreamer1.0-rtsp gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
+
+
+rtsp-server.py
+
+
+#!/usr/bin/env python3
+
+import gi
+gi.require_version('Gst', '1.0')
+gi.require_version('GstRtspServer', '1.0')
+from gi.repository import Gst, GstRtspServer, GObject
+
+class TestRtspServer(GstRtspServer.RTSPMediaFactory):
+    def __init__(self):
+        GstRtspServer.RTSPMediaFactory.__init__(self)
+
+    def do_create_element(self, url):
+        # videotestsrcのsnowパターンを256x200のサイズで送信
+        pipeline = Gst.parse_launch(
+            "videotestsrc pattern=snow ! video/x-raw,width=256,height=200 ! x264enc tune=zerolatency ! rtph264pay name=pay0 pt=96"
+        )
+        return pipeline
+
+
+class GstServer:
+    def __init__(self):
+        self.server = GstRtspServer.RTSPServer.new()
+        self.server.set_service("8554")  # RTSPポート設定
+        self.mounts = self.server.get_mount_points()
+
+        self.factory = TestRtspServer()
+        self.factory.set_shared(True)
+
+        self.mounts.add_factory("/test", self.factory)
+
+        self.server.attach(None)
+        print("RTSP server is running at rtsp://localhost:8554/test")
+
+
+Gst.init(None)
+server = GstServer()
+
+loop = GObject.MainLoop()
+loop.run()
+
+
+
+
+
+
+chmod +x rtsp-server.py
+./rtsp-server.py
+
+
+
+rtsp://localhost:8554/test
+
+
+
+
+sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev qt5-qmake qtbase5-dev
+
+
+
+
+
+sudo apt install python3-gi python3-gst-1.0
+sudo apt install gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
+
+
+
+
+次のようなqt c++ programを作成してください
+rtspで送信された256x200サイズのグレースケール映像をgstreamerでstreaming受信し、256x200の各画素の濃淡情報を取得する
+
+
+
+次のようなqt c++ programを作成してください
+udp h.264 streamingを qtのQVideWidgetの上にQMediaPlayerを使って表示する
+streamingのstart/stop/pauseが行えるようにする
+streamingの録画のstart/stopが行えるようにする
+
+
+
+gst-launch-1.0 -v videotestsrc ! video/x-raw,width=256,height=200 ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5000
+
+
+gst-launch-1.0 -v videotestsrc ! video/x-raw,width=256,height=200 ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5000
+
+
+
+
+
+★
+gst-launch-1.0 videotestsrc ! video/x-raw ! x264enc ! rtph264pay ! udpsink host=127.0.0.1 port=5600 sync=false
+
+
+
+
+
+
+
+
+
+
+
+apt install libqt5multimedia5-plugins
+
+
+apt install libqt5gstreamer*
+
+  libqt5glib-2.0-0 qml-module-qtgstreamer qtgstreamer-plugins-qt5
+
+  libqt5glib-2.0-0 libqt5gstreamer-1.0-0 libqt5gstreamer-dev
+  libqt5gstreamerquick-1.0-0 libqt5gstreamerui-1.0-0
+  libqt5gstreamerutils-1.0-0 qml-module-qtgstreamer qtgstreamer-plugins-qt5
+
+
+
+
