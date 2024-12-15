@@ -1,0 +1,838 @@
+g++ -o gstreamer_pipeline main.cpp `pkg-config --cflags --libs gstreamer-1.0`
+
+
+
+
+#include <QApplication>
+#include <QFileDialog>
+#include <QLabel>
+#include <QPainter>
+#include <QPushButton>
+#include <QTextStream>
+#include <QTimer>
+#include <QVBoxLayout>
+#include <QWidget>
+#include <gst/gst.h>
+#include <gst/video/videooverlay.h>
+
+
+
+
+
+
+    void saveToMKV();
+
+void
+Widget::saveToMKV()
+{
+    // ファイルダイアログで保存先を選択
+    QString filename = QFileDialog::getSaveFileName(this, "Save to MKV", "", "*.mkv");
+    if (filename.isEmpty())
+        return;
+
+    // 新しいパイプラインを作成して保存
+    QString pipelineStr =
+        QString("udpsrc port=5600 ! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! "
+                "matroskamux ! filesink location=%1")
+            .arg(filename);
+
+    GError* error = nullptr;
+    GstElement* savePipeline = gst_parse_launch(pipelineStr.toUtf8().constData(), &error);
+    if (error)
+    {
+        g_printerr("Error: %s\n", error->message);
+        g_error_free(error);
+        return;
+    }
+
+    gst_element_set_state(savePipeline, GST_STATE_PLAYING);
+}
+
+
+void
+Widget::startRecording()
+{
+    if (isRecording)
+        return;
+
+    // mkvファイルに保存するための新しいsinkエレメントを追加
+    sink = gst_parse_bin_from_description("h264parse ! matroskamux ! filesink location=output.mkv",
+                                          TRUE, nullptr);
+
+    if (!sink)
+    {
+        g_printerr("Failed to create recording sink\n");
+        return;
+    }
+
+    // パイプラインに録画用のsinkを追加
+    GstElement* pipeline_sink = gst_bin_get_by_name(GST_BIN(pipeline), "videosink");
+    gst_element_set_state(pipeline_sink, GST_STATE_NULL); // 表示用のシンクを一時停止
+    gst_bin_add(GST_BIN(pipeline), sink);
+    gst_element_link(gst_bin_get_by_name(GST_BIN(pipeline), "videoconvert"), sink);
+    gst_element_set_state(sink, GST_STATE_PLAYING); // 録画開始
+
+    isRecording = true;
+}
+void
+Widget::stopRecording()
+{
+    if (!isRecording)
+        return;
+
+    // 録画を終了してファイルを閉じる
+    gst_element_set_state(sink, GST_STATE_NULL);
+    gst_bin_remove(GST_BIN(pipeline), sink);
+    gst_object_unref(sink);
+    sink = nullptr;
+
+    // 表示用のシンクを再度有効化
+    GstElement* pipeline_sink = gst_bin_get_by_name(GST_BIN(pipeline), "videosink");
+    gst_element_set_state(pipeline_sink, GST_STATE_PLAYING);
+
+    isRecording = false;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+sudo apt-get install gstreamer1.0* libgstreamer1.0-dev
+
+
+
+
+
+
+
+
+
+
+
+#include <QApplication>
+#include <QWidget>
+#include <QLabel>
+#include <QMenu>
+#include <QAction>
+#include <gst/gst.h>
+
+class VideoWidget : public QWidget {
+    Q_OBJECT
+public:
+    explicit VideoWidget(QWidget *parent = nullptr);
+
+private slots:
+    void startRecord();
+    void stopRecord();
+
+private:
+    GstElement *pipeline;
+    GstElement *videosrc;
+    GstElement *videoconvert;
+    GstElement *ximagesink;
+    GstElement *queue;
+    GstElement *mux;
+    GstElement *filesink;
+    QLabel *videoLabel;
+    bool isRecording;
+};
+
+#include "video_widget.moc"
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+    gst_init(&argc, &argv);
+
+    VideoWidget w;
+    w.show();
+
+    return a.exec();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+// video_widget.cpp
+
+VideoWidget::VideoWidget(QWidget *parent) : QWidget(parent) {
+    // パイプラインの構築
+    pipeline = gst_pipeline_new("mypipeline");
+    // ... (省略: 各エレメントの作成と接続)
+
+    // videoLabelにビデオを表示
+    videoLabel = new QLabel(this);
+    videoLabel->setPixmap(QPixmap::fromImage(QImage(640, 480, QImage::Format_RGB888)));
+
+    // 右クリックメニューの作成
+    QMenu *menu = new QMenu(this);
+    QAction *startAction = new QAction("録画開始", this);
+    QAction *stopAction = new QAction("録画終了", this);
+    menu->addAction(startAction);
+    menu->addAction(stopAction);
+    videoLabel->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(videoLabel, &QLabel::customContextMenuRequested, this, [=](const QPoint &pos) {
+        menu->popup(videoLabel->mapToGlobal(pos));
+    });
+
+    connect(startAction, &QAction::triggered, this, &VideoWidget::startRecord);
+    connect(stopAction, &QAction::triggered, this, &VideoWidget::stopRecord);
+
+    // パイプラインの実行
+    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+}
+
+void VideoWidget::startRecord() {
+    // muxとfilesinkをパイプラインに追加し、録画開始
+    isRecording = true;
+}
+
+void VideoWidget::stopRecord() {
+    // muxとfilesinkをパイプラインから削除し、録画終了
+    isRecording = false;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// パイプラインの構築
+pipeline = gst_pipeline_new("mypipeline");
+
+// UDPソースからの取得
+videosrc = gst_element_factory_make("udpsrc", "source");
+g_object_set(videosrc, "port", 5000, "caps", 
+    gst_caps_from_string("application/x-rtp, media=video, clock-rate=90000, encoding-name=H264"), NULL);
+
+// H.264パケットの解析
+h264parse = gst_element_factory_make("h264parse", "h264parse");
+
+// キュー（バッファリング）
+queue = gst_element_factory_make("queue", "queue");
+
+// ビデオの変換（必要に応じて）
+videoconvert = gst_element_factory_make("videoconvert", "videoconvert");
+
+// X画像への変換
+ximagesink = gst_element_factory_make("ximagesink", "ximagesink");
+
+// mux (MP4コンテナ)
+mux = gst_element_factory_make("mp4mux", "mux");
+
+// ファイルへの出力
+filesink = gst_element_factory_make("filesink", "filesink");
+g_object_set(filesink, "location", "output.mp4", NULL);
+
+// 要素の接続
+gst_bin_add_many(GST_BIN(pipeline), videosrc, h264parse, queue, videoconvert, ximagesink, mux, filesink, NULL);
+gst_element_link_many(videosrc, h264parse, queue, videoconvert, ximagesink, NULL);
+
+
+
+
+
+
+
+
+
+
+void VideoWidget::startRecord() {
+    // muxとfilesinkをパイプラインに追加
+    gst_bin_add_many(GST_BIN(pipeline), mux, filesink, NULL);
+    gst_element_link_many(queue, mux, filesink, NULL);
+    isRecording = true;
+}
+
+void VideoWidget::stopRecord() {
+    // muxとfilesinkをパイプラインから削除
+    gst_bin_remove(GST_BIN(pipeline), mux);
+    gst_bin_remove(GST_BIN(pipeline), filesink);
+    // 接続を解除 (必要に応じて)
+    // gst_element_unlink(queue, mux);
+    // gst_element_unlink(mux, filesink);
+    isRecording = false;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#include <QApplication>
+#include <QWidget>
+#include <QMenu>
+#include <QAction>
+#include <QMouseEvent>
+#include <QTimer>
+#include <gst/gst.h>
+#include <gst/video/videooverlay.h>
+#include <iostream>
+
+class GstPlayerWidget : public QWidget {
+    Q_OBJECT
+
+public:
+    GstPlayerWidget(QWidget *parent = nullptr)
+        : QWidget(parent), pipeline(nullptr), recording(false) {
+        // GStreamerの初期化
+        gst_init(nullptr, nullptr);
+
+        // GStreamerパイプラインを作成
+        pipeline = gst_parse_launch("udpsrc port=5000 ! application/x-rtp, payload=96 ! "
+                                    "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! "
+                                    "autovideosink", nullptr);
+
+        if (!pipeline) {
+            std::cerr << "Failed to create pipeline." << std::endl;
+            return;
+        }
+
+        // GStreamerのビデオをQWidgetに表示する設定
+        GstElement *video_sink = gst_bin_get_by_interface(GST_BIN(pipeline), GST_TYPE_VIDEO_OVERLAY);
+        if (video_sink) {
+            gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(video_sink), winId());
+        }
+        gst_object_unref(video_sink);
+
+        // 再生開始
+        gst_element_set_state(pipeline, GST_STATE_PLAYING);
+    }
+
+    ~GstPlayerWidget() {
+        // パイプラインの停止と解放
+        if (pipeline) {
+            gst_element_set_state(pipeline, GST_STATE_NULL);
+            gst_object_unref(pipeline);
+        }
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override {
+        if (event->button() == Qt::RightButton) {
+            QMenu menu(this);
+            QAction *startRecordingAction = new QAction("Start Recording", this);
+            QAction *stopRecordingAction = new QAction("Stop Recording", this);
+
+            connect(startRecordingAction, &QAction::triggered, this, &GstPlayerWidget::startRecording);
+            connect(stopRecordingAction, &QAction::triggered, this, &GstPlayerWidget::stopRecording);
+
+            menu.addAction(startRecordingAction);
+            menu.addAction(stopRecordingAction);
+
+            menu.exec(event->globalPos());
+        }
+    }
+
+private slots:
+    void startRecording() {
+        if (recording) {
+            std::cout << "Already recording." << std::endl;
+            return;
+        }
+
+        // 録画用のファイルを作成し、GStreamerパイプラインに録画エレメントを追加
+        recording_pipeline = gst_parse_launch("udpsrc port=5000 ! application/x-rtp, payload=96 ! "
+                                              "rtph264depay ! h264parse ! mp4mux ! filesink location=recording.mp4",
+                                              nullptr);
+        if (!recording_pipeline) {
+            std::cerr << "Failed to create recording pipeline." << std::endl;
+            return;
+        }
+
+        gst_element_set_state(recording_pipeline, GST_STATE_PLAYING);
+        recording = true;
+        std::cout << "Recording started." << std::endl;
+    }
+
+    void stopRecording() {
+        if (!recording) {
+            std::cout << "Not recording." << std::endl;
+            return;
+        }
+
+        // 録画パイプラインを停止して解放
+        gst_element_set_state(recording_pipeline, GST_STATE_NULL);
+        gst_object_unref(recording_pipeline);
+        recording_pipeline = nullptr;
+        recording = false;
+        std::cout << "Recording stopped." << std::endl;
+    }
+
+private:
+    GstElement *pipeline;
+    GstElement *recording_pipeline;
+    bool recording;
+};
+
+int main(int argc, char *argv[]) {
+    QApplication app(argc, argv);
+
+    GstPlayerWidget player;
+    player.resize(800, 600);
+    player.show();
+
+    return app.exec();
+}
+
+#include "main.moc"
+
+
+
+
+
+
+
+
+g++ -o gst_qt_player main.cpp `pkg-config --cflags --libs gstreamer-1.0` `pkg-config --cflags --libs Qt5Widgets`
+
+
+
+
+
+
+
+
+
+
+
+
+
+#include <QApplication>
+#include <QWidget>
+#include <QMenu>
+#include <QAction>
+#include <QMouseEvent>
+#include <QTimer>
+#include <gst/gst.h>
+#include <gst/video/videooverlay.h>
+#include <iostream>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+
+class GstPlayerWidget : public QWidget {
+    Q_OBJECT
+
+public:
+    GstPlayerWidget(QWidget *parent = nullptr)
+        : QWidget(parent), pipeline(nullptr), recording(false) {
+        // GStreamerの初期化
+        gst_init(nullptr, nullptr);
+
+        // GStreamerパイプラインを作成（再生用）
+        pipeline = gst_parse_launch("udpsrc port=5000 ! application/x-rtp, payload=96 ! "
+                                    "rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! "
+                                    "autovideosink", nullptr);
+
+        if (!pipeline) {
+            std::cerr << "Failed to create pipeline." << std::endl;
+            return;
+        }
+
+        // GStreamerのビデオをQWidgetに表示する設定
+        GstElement *video_sink = gst_bin_get_by_interface(GST_BIN(pipeline), GST_TYPE_VIDEO_OVERLAY);
+        if (video_sink) {
+            gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(video_sink), winId());
+        }
+        gst_object_unref(video_sink);
+
+        // 再生開始
+        gst_element_set_state(pipeline, GST_STATE_PLAYING);
+    }
+
+    ~GstPlayerWidget() {
+        // パイプラインの停止と解放
+        if (pipeline) {
+            gst_element_set_state(pipeline, GST_STATE_NULL);
+            gst_object_unref(pipeline);
+        }
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override {
+        if (event->button() == Qt::RightButton) {
+            QMenu menu(this);
+            QAction *startRecordingAction = new QAction("Start Recording", this);
+            QAction *stopRecordingAction = new QAction("Stop Recording", this);
+
+            connect(startRecordingAction, &QAction::triggered, this, &GstPlayerWidget::startRecording);
+            connect(stopRecordingAction, &QAction::triggered, this, &GstPlayerWidget::stopRecording);
+
+            menu.addAction(startRecordingAction);
+            menu.addAction(stopRecordingAction);
+
+            menu.exec(event->globalPos());
+        }
+    }
+
+private slots:
+    void startRecording() {
+        if (recording) {
+            std::cout << "Already recording." << std::endl;
+            return;
+        }
+
+        // 録画ファイル名に現在の日付と時間を付加する
+        std::string filename = generateFilename();
+
+        // 録画用のファイルを作成し、GStreamerパイプラインに録画エレメントを追加
+        std::string recordingPipelineDesc = "udpsrc port=5000 ! application/x-rtp, payload=96 ! "
+                                            "rtph264depay ! h264parse ! mp4mux ! filesink location=" + filename;
+        recording_pipeline = gst_parse_launch(recordingPipelineDesc.c_str(), nullptr);
+
+        if (!recording_pipeline) {
+            std::cerr << "Failed to create recording pipeline." << std::endl;
+            return;
+        }
+
+        gst_element_set_state(recording_pipeline, GST_STATE_PLAYING);
+        recording = true;
+        std::cout << "Recording started. Saving to: " << filename << std::endl;
+    }
+
+    void stopRecording() {
+        if (!recording) {
+            std::cout << "Not recording." << std::endl;
+            return;
+        }
+
+        // 録画パイプラインを停止して解放
+        gst_element_set_state(recording_pipeline, GST_STATE_NULL);
+        gst_object_unref(recording_pipeline);
+        recording_pipeline = nullptr;
+        recording = false;
+        std::cout << "Recording stopped." << std::endl;
+    }
+
+private:
+    GstElement *pipeline;
+    GstElement *recording_pipeline;
+    bool recording;
+
+    // 日付付きのファイル名を生成する関数
+    std::string generateFilename() {
+        // 現在の日時を取得
+        std::time_t now = std::time(nullptr);
+        std::tm *localTime = std::localtime(&now);
+
+        // YYYYMMDD-hhmmss形式の文字列を生成
+        std::ostringstream filename;
+        filename << "recording_"
+                 << std::put_time(localTime, "%Y%m%d-%H%M%S") << ".mp4";
+
+        return filename.str();
+    }
+};
+
+int main(int argc, char *argv[]) {
+    QApplication app(argc, argv);
+
+    GstPlayerWidget player;
+    player.resize(800, 600);
+    player.show();
+
+    return app.exec();
+}
+
+#include "main.moc"
+
+
+
+
+
+
+
+
+gst-launch-1.0 udpsrc port=5000 ! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! avdec_h264 ! timeoverlay halignment=right valignment=top ! videoconvert ! autovideosink
+
+
+
+
+#include <gst/gst.h>
+#include <iostream>
+
+int main(int argc, char *argv[]) {
+    gst_init(&argc, &argv);
+
+    // パイプラインの作成
+    GstElement *pipeline = gst_parse_launch(
+        "udpsrc port=5000 ! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! avdec_h264 ! "
+        "timeoverlay halignment=right valignment=top ! videoconvert ! autovideosink",
+        nullptr);
+
+    if (!pipeline) {
+        std::cerr << "Failed to create pipeline." << std::endl;
+        return -1;
+    }
+
+    // パイプラインを再生状態に設定
+    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+
+    // メインループの作成
+    GMainLoop *loop = g_main_loop_new(nullptr, FALSE);
+    g_main_loop_run(loop);
+
+    // パイプラインの停止
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
+    g_main_loop_unref(loop);
+
+    return 0;
+}
+
+
+
+
+
+
+
+gst-launch-1.0 udpsrc port=5000 ! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! tee name=t \
+t. ! queue ! avdec_h264 ! timeoverlay halignment=right valignment=top ! videoconvert ! autovideosink \
+t. ! queue ! matroskamux ! filesink location=output.mkv
+
+
+
+
+
+#include <gst/gst.h>
+#include <iostream>
+
+int main(int argc, char *argv[]) {
+    gst_init(&argc, &argv);
+
+    // パイプラインの作成
+    GstElement *pipeline = gst_parse_launch(
+        "udpsrc port=5000 ! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! tee name=t "
+        "t. ! queue ! avdec_h264 ! timeoverlay halignment=right valignment=top ! videoconvert ! autovideosink "
+        "t. ! queue ! matroskamux ! filesink location=output.mkv",
+        nullptr);
+
+    if (!pipeline) {
+        std::cerr << "Failed to create pipeline." << std::endl;
+        return -1;
+    }
+
+    // パイプラインを再生状態に設定
+    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+
+    // メインループの作成
+    GMainLoop *loop = g_main_loop_new(nullptr, FALSE);
+    g_main_loop_run(loop);
+
+    // パイプラインの停止
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
+    g_main_loop_unref(loop);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#include <gst/gst.h>
+#include <iostream>
+
+int main(int argc, char *argv[]) {
+    gst_init(&argc, &argv);
+
+    // パイプラインの作成
+    GstElement *pipeline = gst_parse_launch(
+        "udpsrc port=5000 ! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! tee name=t "
+        "t. ! queue ! avdec_h264 ! timeoverlay halignment=right valignment=top ! videoconvert ! autovideosink "
+        "t. ! queue ! matroskamux ! filesink location=output.mkv",
+        nullptr);
+
+    if (!pipeline) {
+        std::cerr << "Failed to create pipeline." << std::endl;
+        return -1;
+    }
+
+    // パイプラインを再生状態に設定
+    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+
+    // メインループの作成
+    GMainLoop *loop = g_main_loop_new(nullptr, FALSE);
+    g_main_loop_run(loop);
+
+    // パイプラインの停止
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
+    g_main_loop_unref(loop);
+
+    return 0;
+}
+
+
+
+
+
+
+g++ -o gstreamer_pipeline main.cpp `pkg-config --cflags --libs gstreamer-1.0`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#include <gst/gst.h>
+#include <cairo.h>
+#include <iostream>
+
+// cairooverlayのcallback関数: 赤丸を左上に描画
+static void draw_overlay(GstElement *overlay, cairo_t *cr, guint64 timestamp, guint64 duration, gpointer user_data) {
+    // 赤い丸の描画
+    cairo_set_source_rgb(cr, 1.0, 0.0, 0.0);  // 赤色
+    cairo_arc(cr, 50, 50, 30, 0, 2 * M_PI);   // 中心(50,50), 半径30の円
+    cairo_fill(cr);
+}
+
+int main(int argc, char *argv[]) {
+    gst_init(&argc, &argv);
+
+    // GStreamerパイプラインの作成
+    GstElement *pipeline = gst_parse_launch(
+        "udpsrc port=5000 ! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! tee name=t "
+        "t. ! queue ! avdec_h264 ! cairooverlay name=cairo ! timeoverlay halignment=right valignment=top ! videoconvert ! autovideosink "
+        "t. ! queue ! matroskamux ! filesink location=output.mkv",
+        nullptr);
+
+    if (!pipeline) {
+        std::cerr << "Failed to create pipeline." << std::endl;
+        return -1;
+    }
+
+    // cairooverlayの取得とコールバック設定
+    GstElement *cairo_overlay = gst_bin_get_by_name(GST_BIN(pipeline), "cairo");
+    if (cairo_overlay) {
+        g_object_set(cairo_overlay, "draw", G_CALLBACK(draw_overlay), nullptr);
+        gst_object_unref(cairo_overlay);
+    } else {
+        std::cerr << "Failed to get cairooverlay element." << std::endl;
+        gst_object_unref(pipeline);
+        return -1;
+    }
+
+    // パイプラインを再生状態に設定
+    gst_element_set_state(pipeline, GST_STATE_PLAYING);
+
+    // メインループの作成
+    GMainLoop *loop = g_main_loop_new(nullptr, FALSE);
+    g_main_loop_run(loop);
+
+    // パイプラインの停止
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
+    g_main_loop_unref(loop);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+g++ -o gstreamer_pipeline main.cpp `pkg-config --cflags --libs gstreamer-1.0`
+
+
+
