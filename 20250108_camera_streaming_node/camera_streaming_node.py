@@ -12,13 +12,13 @@ from gi.repository import Gst, GLib
 class CameraStreamingNode(Node):
     def __init__(self):
         super().__init__('camera_streaming_node')
-        self.publisher_ = self.create_publisher(Image, 'camera/image_raw', 10)
+        self.publisher_ = self.create_publisher(Image, 'camera_image', 10)
         self.bridge = CvBridge()
 
         # GStreamer初期化
         Gst.init(None)
         self.pipeline = Gst.parse_launch(
-            'udpsrc port=5000 ! application/x-rtp, payload=96 ! rtph264depay ! avdec_h264 ! videoconvert ! video/x-raw, format=I420 ! appsink name=sink'
+            'udpsrc port=5600 ! application/x-rtp, payload=96 ! rtph264depay ! avdec_h264 ! videoconvert ! video/x-raw, format=I420 ! appsink name=sink'
         )
         self.appsink = self.pipeline.get_by_name('sink')
         self.appsink.set_property('emit-signals', True)
