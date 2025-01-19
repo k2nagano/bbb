@@ -1299,3 +1299,15 @@ C++11以降では、std::string str = {}という書き方も可能です。こ�
 どちらの方法を選ぶかは、プログラマーの好みやプロジェクトの状況によって異なります。重要なのは、コードの可読性と保守性を高めるために、一貫した書き方を心がけることです。
 
 
+
+
+gst-launch-1.0 rtspsrc location=rtsp://127.0.0.1:8554/raw latency=0 buffer-mode=0 ! decodebin ! appsink drop=1 sync=false
+
+
+apt install libgstrtspserver-1.0-dev 
+
+
+
+gst-launch-1.0 videotestsrc pattern=ball ! video/x-raw,width=256,height=200,framerate=15/1 ! decodebin ! autovideosink
+
+
