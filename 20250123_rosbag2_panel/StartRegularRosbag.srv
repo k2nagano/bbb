@@ -1,0 +1,6 @@
+string output_directory
+uint32 split_minute
+uint32 max_splits
+---
+bool success
+string message

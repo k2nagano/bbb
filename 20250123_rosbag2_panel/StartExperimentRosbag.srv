@@ -1,0 +1,7 @@
+string output_directory
+string test_type
+uint32 test_no
+---
+bool success
+string message
+
