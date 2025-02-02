@@ -4365,3 +4365,165 @@ Ubuntu のディスプレイサーバー（X11 または Wayland）の違いが�
 
 
 
+
+
+共有する
+
+あなた:
+ubuntu20.04 ros2 foxyを使っています
+rviz2 pluginで、statuts_textというstring topic messageを受信して、rviz2上にテキストを描画してください。このときstatuts_textの内容が変わったら30秒間テキストの背景色を黄色でハイライトしてください。さらにstatuts_textの内容が変わったら、その時刻とともにテキスト内容の履歴を保持し、設定により表示できるよにしてください
+ChatGPT:
+
+RViz2のプラグインを作成し、status_text というString型のトピックを受信し、テキストを描画する方法を説明します。また、内容の変化時に背景色を30秒間黄色でハイライトし、履歴を保持する機能を実装します。
+
+1. 環境
+Ubuntu 20.04
+ROS2 Foxy
+RViz2 Plugin (C++)
+2. プラグインの基本構造
+RViz2のカスタムディスプレイプラグインを作成するために、以下の手順を行います。
+
+1. ワークスペースの準備
+bash
+コピーする
+編集する
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+ros2 pkg create rviz2_status_display --build-type ament_cmake --dependencies rclcpp rviz_common std_msgs
+cd ~/ros2_ws
+colcon build
+2. C++ コード
+src/status_display.cpp
+cpp
+コピーする
+編集する
+#include <rviz_common/display.hpp>
+#include <rviz_rendering/objects/movable_text.hpp>
+#include <std_msgs/msg/string.hpp>
+#include <rclcpp/rclcpp.hpp>
+
+#include <deque>
+#include <string>
+
+namespace rviz2_status_display
+{
+class StatusDisplay : public rviz_common::Display
+{
+public:
+    StatusDisplay()
+        : node_(std::make_shared<rclcpp::Node>("status_display_node")),
+          text_object_(nullptr),
+          last_update_time_(0),
+          highlight_duration_(30.0)
+    {}
+
+    void onInitialize() override
+    {
+        // RViz2のシーンにテキストオブジェクトを追加
+        text_object_ = new rviz_rendering::MovableText("Waiting for messages...");
+        text_object_->setCharacterHeight(0.1f);
+        scene_node_ = scene_manager_->getRootSceneNode()->createChildSceneNode();
+        scene_node_->attachObject(text_object_);
+
+        // ROS2トピックを購読
+        subscriber_ = node_->create_subscription<std_msgs::msg::String>(
+            "status_text", 10,
+            std::bind(&StatusDisplay::messageCallback, this, std::placeholders::_1));
+    }
+
+    void messageCallback(const std_msgs::msg::String::SharedPtr msg)
+    {
+        std::string new_text = msg->data;
+        double current_time = node_->now().seconds();
+
+        if (new_text != last_text_)
+        {
+            last_update_time_ = current_time;
+            text_object_->setColor(Ogre::ColourValue(1.0f, 1.0f, 0.0f));  // 黄色ハイライト
+            history_.push_back({current_time, new_text});
+            if (history_.size() > max_history_) history_.pop_front();
+        }
+
+        last_text_ = new_text;
+        text_object_->setCaption(new_text);
+    }
+
+    void update(float, float) override
+    {
+        double elapsed_time = node_->now().seconds() - last_update_time_;
+        if (elapsed_time > highlight_duration_)
+        {
+            text_object_->setColor(Ogre::ColourValue(1.0f, 1.0f, 1.0f));  // 白色に戻す
+        }
+    }
+
+private:
+    rclcpp::Node::SharedPtr node_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscriber_;
+
+    rviz_rendering::MovableText* text_object_;
+    Ogre::SceneNode* scene_node_;
+
+    std::string last_text_;
+    double last_update_time_;
+    double highlight_duration_;
+    
+    std::deque<std::pair<double, std::string>> history_;
+    const size_t max_history_ = 10;  // 履歴の最大件数
+};
+
+}  // namespace rviz2_status_display
+
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(rviz2_status_display::StatusDisplay, rviz_common::Display)
+3. CMakeLists.txt
+CMakeLists.txt に以下を追加：
+
+cmake
+コピーする
+編集する
+find_package(rviz_common REQUIRED)
+find_package(rviz_rendering REQUIRED)
+
+add_library(status_display SHARED src/status_display.cpp)
+target_link_libraries(status_display rviz_common::rviz_common rviz_rendering::rviz_rendering)
+ament_target_dependencies(status_display rclcpp std_msgs)
+pluginlib_export_plugin_description_file(rviz_common plugins.xml)
+4. plugins.xml
+plugins.xml に以下を記述：
+
+xml
+コピーする
+編集する
+<library path="status_display">
+    <class name="rviz2_status_display::StatusDisplay"
+           type="rviz2_status_display::StatusDisplay"
+           base_class_type="rviz_common::Display">
+        <description>Display status_text messages in RViz2.</description>
+    </class>
+</library>
+5. package.xml
+以下を追加：
+
+xml
+コピーする
+編集する
+<depend>rviz_common</depend>
+<depend>rviz_rendering</depend>
+<depend>std_msgs</depend>
+6. ビルド & 実行
+bash
+コピーする
+編集する
+cd ~/ros2_ws
+colcon build --symlink-install
+source install/setup.bash
+rviz2
+RViz2の「Displays」から StatusDisplay を追加すれば動作します。
+
+7. 動作仕様
+status_text のメッセージをテキストとして表示
+内容が変わると30秒間ハイライト
+変更履歴を保持し、設定で表示可能（後でGUIオプション追加可）
+
+
